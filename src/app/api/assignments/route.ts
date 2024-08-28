@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
+import mysql, { RowDataPacket } from 'mysql2/promise';
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -12,6 +12,19 @@ export async function POST(req: NextRequest) {
   const { van_id, operator_id } = await req.json();
 
   try {
+    // Cast the result to RowDataPacket[]
+    const [existingAssignment] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM assignments WHERE van_id = ? OR operator_id = ?',
+      [van_id, operator_id]
+    );
+
+    if (existingAssignment.length > 0) {
+      return NextResponse.json(
+        { message: 'Van or operator is already assigned' },
+        { status: 400 }
+      );
+    }
+
     const [result] = await pool.query(
       'INSERT INTO assignments (van_id, operator_id) VALUES (?, ?)',
       [van_id, operator_id]
@@ -25,9 +38,38 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  const { id, van_id, operator_id } = await req.json();
+
+  try {
+    // Cast the result to RowDataPacket[]
+    const [existingAssignment] = await pool.query<RowDataPacket[]>(
+      'SELECT * FROM assignments WHERE (van_id = ? OR operator_id = ?) AND id != ?',
+      [van_id, operator_id, id]
+    );
+
+    if (existingAssignment.length > 0) {
+      return NextResponse.json(
+        { message: 'Van or operator is already assigned' },
+        { status: 400 }
+      );
+    }
+
+    await pool.query(
+      'UPDATE assignments SET van_id = ?, operator_id = ? WHERE id = ?',
+      [van_id, operator_id, id]
+    );
+
+    return NextResponse.json({ message: 'Assignment updated successfully' }, { status: 200 });
+  } catch (error: any) {
+    return NextResponse.json({ message: 'Failed to update assignment', error: error.message }, { status: 500 });
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const [rows] = await pool.query('SELECT * FROM assignments');
+    // Cast the result to RowDataPacket[]
+    const [rows] = await pool.query<RowDataPacket[]>('SELECT * FROM assignments');
     return NextResponse.json(rows);
   } catch (error: any) {
     return NextResponse.json({ message: 'Failed to retrieve assignments', error: error.message }, { status: 500 });

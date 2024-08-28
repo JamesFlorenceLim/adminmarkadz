@@ -1,27 +1,38 @@
-"use client";
+"use client"
 
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
-import axios from "axios";
-import { Operator, Van } from "@/types";
+
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
+import axios from 'axios';
+import Modal from './Modal'; // Import the Modal component
+import { Operator, Van } from '@/types';
 
 const AssignmentForm = () => {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [vans, setVans] = useState<Van[]>([]);
-  const [assignment, setAssignment] = useState({ van_id: 0, operator_id: 0 });
+  const [assignments, setAssignments] = useState([]);
+  const [assignment, setAssignment] = useState({ id: null, van_id: 0, operator_id: 0 });
+  const [isEditing, setIsEditing] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchOperators = async () => {
-      const { data } = await axios.get("/api/operators");
+      const { data } = await axios.get('/api/operators');
       setOperators(data);
     };
 
     const fetchVans = async () => {
-      const { data } = await axios.get("/api/vans");
+      const { data } = await axios.get('/api/vans');
       setVans(data);
+    };
+
+    const fetchAssignments = async () => {
+      const { data } = await axios.get('/api/assignments');
+      setAssignments(data);
     };
 
     fetchOperators();
     fetchVans();
+    fetchAssignments();
   }, []);
 
   const handleChange = (e: ChangeEvent<HTMLSelectElement>) => {
@@ -32,55 +43,76 @@ const AssignmentForm = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const response = await axios.post("/api/assignments", assignment);
-      setOperators((prevOperators) => [
-        ...prevOperators,
-        response.data.operator,
-      ]);
-      alert("Assignment created successfully");
-      setAssignment({ van_id: 0, operator_id: 0 });
+      if (isEditing && assignment.id) {
+        await axios.put(`/api/assignments`, assignment);
+        alert('Assignment updated successfully');
+      } else {
+        await axios.post('/api/assignments', assignment);
+        alert('Assignment created successfully');
+      }
+
+      setAssignment({ id: null, van_id: 0, operator_id: 0 });
+      setIsEditing(false);
+      setIsModalOpen(false); // Close the modal after successful submission
+      // Refresh assignments
+      const { data } = await axios.get('/api/assignments');
+      setAssignments(data);
     } catch (error) {
-      alert("Failed to create assignment");
+      alert('Failed to save assignment');
+    }
+  };
+
+  const handleEdit = (id: number) => {
+    const assignmentToEdit = assignments.find((assignment: any) => assignment.id === id);
+    if (assignmentToEdit) {
+      setAssignment(assignmentToEdit);
+      setIsEditing(true);
+      setIsModalOpen(true);
+    } else {
+      console.log('Assignment not found');
     }
   };
 
   return (
     <>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Operator</label>
-          <select
-            name="operator_id"
-            value={assignment.operator_id}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select Operator</option>
-            {operators.map((operator) => (
-              <option key={operator.id} value={operator.id}>
-                {operator.firstname} {operator.lastname}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label>Van</label>
-          <select
-            name="van_id"
-            value={assignment.van_id}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select Van</option>
-            {vans.map((van) => (
-              <option key={van.id} value={van.id}>
-                {van.plate_number}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button type="submit">Create Assignment</button>
-      </form>
+      <button onClick={() => setIsModalOpen(true)}>Add Assignment</button>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label>Operator</label>
+            <select
+              name="operator_id"
+              value={assignment.operator_id}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Operator</option>
+              {operators.map((operator) => (
+                <option key={operator.id} value={operator.id}>
+                  {operator.firstname} {operator.lastname}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Van</label>
+            <select
+              name="van_id"
+              value={assignment.van_id}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Van</option>
+              {vans.map((van) => (
+                <option key={van.id} value={van.id}>
+                  {van.plate_number}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button type="submit">{isEditing ? 'Update Assignment' : 'Create Assignment'}</button>
+        </form>
+      </Modal>
       <table>
         <thead>
           <tr>
@@ -90,17 +122,16 @@ const AssignmentForm = () => {
           </tr>
         </thead>
         <tbody>
-          {operators.map((operator, index) => (
-            <tr key={index}>
+          {assignments.map((assignment: any) => (
+            <tr key={assignment.id}>
               <td>
-                {operator.firstname} {operator.lastname}
+                {operators.find((operator) => operator.id === assignment.operator_id)?.firstname} {operators.find((operator) => operator.id === assignment.operator_id)?.lastname}
               </td>
               <td>
                 {vans.find((van) => van.id === assignment.van_id)?.plate_number}
               </td>
               <td>
-                <button>View</button>
-                <button>Edit</button>
+                <button onClick={() => handleEdit(assignment.id)}>Edit</button>
               </td>
             </tr>
           ))}
