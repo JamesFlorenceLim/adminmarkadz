@@ -18,6 +18,8 @@ export interface Operator {
 }
 
 export interface Van {
+  firstname: string;
+  lastname: string;
   id: number;
   mv_file_no: string;
   plate_number: string;
